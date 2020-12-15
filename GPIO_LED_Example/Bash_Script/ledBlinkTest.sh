@@ -7,7 +7,7 @@
 # Author:    Carlos Y. Alvarez                                                               #
 # Date:      2020 December, 05                                                               #
 # File Name: ledBlinkTest.sh                                                                 #
-# Source:    https://github.com/CarlosYAlvarez/BeagleBoneBlack-Embedded-Linux-Tutorials      #   
+# Source:    https://github.com/CarlosYAlvarez/BeagleBoneBlack_Embedded_Linux.git            #   
 ##############################################################################################
 
 #!/bin/bash
