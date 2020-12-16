@@ -74,9 +74,10 @@ const std::array<std::pair<unsigned int, std::string>, GPIO_PINS> GPIO::GPIO_PIN
 }};
 
 /*
- * Setup the chosen GPIO pin.
+ * Description:
+ * 	Setup the chosen GPIO pin.
  */
-GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin), gpioPinDirection(direction), gpioPinValue(GPIO::VALUE::LOW)
+GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin)
 {
 	/*
 	 * Create the path /sys/class/gpio/gpio<PinNumber>/. This gives access to the following attributes:
@@ -95,12 +96,20 @@ GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin), gpioPinD
 	const char *configPinCmd = str.c_str();
 
 	system(configPinCmd);
+
+	setValue(GPIO::VALUE::LOW);
+	setDirection(GPIO::DIRECTION::OUTPUT);
 }
 
 /*
- * Description: Access the lookup table to match a GPIO pin number with the physical pin number on the BBB.
- * Args PIN_NUMBER the GPIO pin number being used
- * Return The physical pin number on the board that maps to the GPIO pin number being used
+ * Description:
+ * 	Access the lookup table to match a GPIO pin number with the physical pin number on the BBB.
+ *
+ * Args:
+ * 	PIN_NUMBER the GPIO pin number being used
+ *
+ * Return
+ * 	The physical pin number on the board that maps to the GPIO pin number being used
  */
 const string GPIO::getPinName(const unsigned int GPIO_PIN_NUMBER)
 {
@@ -115,6 +124,83 @@ const string GPIO::getPinName(const unsigned int GPIO_PIN_NUMBER)
 	}
 
 	return gpioPinName;
+}
+
+/*
+ * Description:
+ *	Updates the value of the selected GPIO pin.
+ *
+ * Args:
+ *	GPIO_VALUE The new value of the selected GPIO pin
+ *
+ * Return
+ * 	None
+ */
+void GPIO::setValue(const VALUE GPIO_VALUE) const
+{
+	writeToFile("value", to_string((int)GPIO_VALUE));
+}
+
+/*
+ * Description:
+ *	Updates the direction of the selected GPIO pin.
+ *
+ * Args:
+ *	GPIO_DIRECTION The new direction for the selected GPIO pin
+ *
+ * Return
+ * 	None
+ */
+void GPIO::setDirection(const DIRECTION GPIO_DIRECTION) const
+{
+	string directionValue;
+
+	switch(GPIO_DIRECTION)
+	{
+	case DIRECTION::INPUT:
+		directionValue = "in";
+		break;
+	case DIRECTION::OUTPUT:
+		directionValue = "out";
+		break;
+	default:
+		directionValue = "out";
+		break;
+	}
+
+	writeToFile("direction", directionValue);
+}
+
+/*
+ * Description:
+ *	Writes specified value to a file.
+ *
+ * Args:
+ *	FILE_NAME The file to write to
+ *	VALUE The value to write into the file
+ *
+ * Return
+ * 	True if the file was opened
+ */
+bool GPIO::writeToFile(const string FILE_NAME, const string VALUE) const
+{
+	//Open the file /sys/class/gpio/gpio<PinNumber>/<FILE_NAME> for writing
+	ofstream gpioAttributeFile;
+	gpioAttributeFile.open((this->gpioPinPath + FILE_NAME).c_str(), ios_base::out);
+
+	bool fileIsOpen = gpioAttributeFile.is_open();
+
+	if(fileIsOpen)
+	{
+		gpioAttributeFile << VALUE; // same as: echo <VALUE> > <FILE_NAME>
+		gpioAttributeFile.close();
+	}
+	else
+	{
+		perror(("FailedTo open file for writing: " + this->gpioPinPath + FILE_NAME).c_str());
+	}
+
+	return fileIsOpen;
 }
 
 /*

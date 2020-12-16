@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <array>
+#include<fstream>
 
 using namespace std;
 
@@ -25,19 +26,19 @@ public:
 
 	GPIO(unsigned int pin, DIRECTION = DIRECTION::OUTPUT);
 	~GPIO();
+	void setValue(const VALUE GPIO_VALUE) const;
+	void setDirection(const DIRECTION GPIO_DIRECTION) const;
 
 private:
 
 	static const string GPIO_PATH;
 	static const std::array<std::pair<unsigned int, std::string>, GPIO_PINS> GPIO_PIN_LOOKUP_TABLE;
 
-	/* Pin Attributes */
 	string gpioPinPath;
 	unsigned int gpioPinNumber;
-	DIRECTION gpioPinDirection;
-	VALUE gpioPinValue;
 
 	const string getPinName(const unsigned int GPIO_PIN_NUMBER);
+	bool writeToFile(const string fileName, const string value) const;
 };
 
 #endif /* H_GPIO_H_ */
