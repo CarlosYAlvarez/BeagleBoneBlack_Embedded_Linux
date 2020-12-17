@@ -9,8 +9,66 @@
 
 using namespace std;
 
+void ledTest(void);
+void buttonTest(void);
+void i2cTest(void);
+void pwmTest(void);
+void spiTest(void);
+void analogTest(void);
+
+enum TEST
+{
+	TEST_GPIO_LED = 0,
+	TEST_GPIO_BUTTON,
+	TEST_I2C,
+	TEST_PWM,
+	TEST_SPI,
+	TEST_ANALOG,
+	TEST_NUM
+};
+
+void (*test[TEST_NUM]) (void);
+
 int main()
 {
+	unsigned int testNumber = 0;
+	test[TEST_GPIO_LED] = ledTest;
+	test[TEST_GPIO_BUTTON] = buttonTest;
+	test[TEST_I2C] = i2cTest;
+	test[TEST_PWM] = pwmTest;
+	test[TEST_SPI] = spiTest;
+	test[TEST_ANALOG] = analogTest;
+
+	while(true)
+	{
+		cout << "=== Choose test to execute ===" << endl;
+		cout << "GPIO LED Test:    " << TEST_GPIO_LED << endl;
+		cout << "GPIO Button Test: " << TEST_GPIO_BUTTON << endl;
+		cout << "I2C Test:         " << TEST_I2C << endl;
+		cout << "PWM Test:         " << TEST_PWM << endl;
+		cout << "SPI Test:         " << TEST_SPI << endl;
+		cout << "Analog Test:      " << TEST_ANALOG << endl;
+		cout << "Exit:             " << TEST_NUM << endl;
+
+		cin >> testNumber;
+
+		if(testNumber == TEST_NUM)
+		{
+			break;
+		}
+		else
+		{
+			(*test[testNumber])();
+		}
+	}
+
+	return 0;
+}
+
+void ledTest(void)
+{
+	cout << "Running GPIO LED Test" << endl;
+
 	GPIO led(49, GPIO::DIRECTION::OUTPUT);
 
 	for (int i = 0; i < 5; i++)
@@ -21,6 +79,34 @@ int main()
 		led.setValue(GPIO::VALUE::LOW);
 		sleep(1);
 	}
-
-	return 0;
 }
+
+void buttonTest(void)
+{
+	cout << "Running GPIO Button Test" << endl;
+}
+
+void i2cTest(void)
+{
+	cout << "Running I2C Test" << endl;
+
+}
+
+void pwmTest(void)
+{
+	cout << "Running PWM Test" << endl;
+
+}
+
+void spiTest(void)
+{
+	cout << "Running SPI Test" << endl;
+
+}
+
+void analogTest(void)
+{
+	cout << "Running Analog Test" << endl;
+
+}
+
