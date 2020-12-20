@@ -34,11 +34,14 @@ public:
 
 	GPIO(unsigned int pin, DIRECTION = DIRECTION::OUTPUT, EDGE = EDGE::NONE);
 	~GPIO();
+
 	void setValue(const VALUE GPIO_VALUE) const;
 	void setDirection(const DIRECTION GPIO_DIRECTION) const;
 	void setEdge(const EDGE GPIO_EDGE) const;
 
 	void triggerOnEdge(edgeCallback callback);
+
+	int inputWaitTimeMS; //Amount to wait for an input before returning
 
 private:
 

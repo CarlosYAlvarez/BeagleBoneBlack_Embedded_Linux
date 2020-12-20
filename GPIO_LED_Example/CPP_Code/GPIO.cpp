@@ -109,6 +109,9 @@ GPIO::GPIO(unsigned int pin, DIRECTION direction, EDGE edge) : gpioPinNumber(pin
 	setValue(GPIO::VALUE::LOW);
 	setDirection(direction);
 	setEdge(edge);
+
+	//Will apply only to GPIOs set as inputs.
+	inputWaitTimeMS = -1; //Wait indefinitely for a file descriptor to be ready
 }
 
 /*
@@ -219,6 +222,9 @@ void GPIO::triggerOnEdge(edgeCallback callback)
 	edgeTrigger.join();
 }
 
+/*
+ * Read urgent data on edge trigger.
+ */
 void GPIO::pollEdge(edgeCallback callback) const
 {
 	/*
@@ -240,10 +246,10 @@ void GPIO::pollEdge(edgeCallback callback) const
 	 * the kernel destroys the instance and releases the associated  resources
 	 * for reuse.
 	 */
-	int epollFileDescriptor = epoll_create(1); //TODO: Close the epoll_create fd
+	int epollFileDescriptor = epoll_create(1);
     if (epollFileDescriptor == -1)
     {
-	   perror("GPIO: epoll_create(1) failed");
+	   perror("GPIO::pollEdge - Failed to create a new epoll instance: epoll_create()");
 	   exit(EXIT_FAILURE);
     }
 
@@ -281,7 +287,7 @@ void GPIO::pollEdge(edgeCallback callback) const
     int fileDescriptor = open((this->gpioPinPath + "value").c_str(), O_RDONLY | O_NONBLOCK);
     if ( fileDescriptor == -1)
     {
-       perror("GPIO: Failed to open file the value file.");
+       perror("GPIO::pollEdge - Failed to open the GPIO value file: open()");
        exit(EXIT_FAILURE);
     }
 
@@ -297,9 +303,12 @@ void GPIO::pollEdge(edgeCallback callback) const
      * EPOLLPRI:
      * 			There is urgent data available for read(2) operations.
      */
+
+    //TODO: Look into adding EPOLLONESHOT. Because the epoll_wait function always seems to return 1 time on the first go around,
+    //      adding EPOLLONESHOT, will remove the file descriptor before the button is even actually pressed.
 	struct epoll_event epollEvent;
-    epollEvent.events = EPOLLIN | EPOLLET | EPOLLPRI;	// read operation | edge triggered | urgent data
-    epollEvent.data.fd = fileDescriptor;  				// Associate the file's file descriptor
+    epollEvent.events = EPOLLIN | EPOLLET | EPOLLPRI; // read operation | edge triggered | urgent data
+    epollEvent.data.fd = fileDescriptor;              // Associate the file's file descriptor
 
     /* ************************************************************************
      * Add the file descriptor entry to the new epoll instance created
@@ -315,9 +324,8 @@ void GPIO::pollEdge(edgeCallback callback) const
 				  &epollEvent)			// Describes which events the caller is interested in and any associated user data
     		== -1)
     {
-       perror("GPIO: Failed to add control interface");
+       perror("GPIO::pollEdge - Failed to add control interface: epoll_ctl()");
        close(fileDescriptor);
-       close(epollFileDescriptor);
        exit(EXIT_FAILURE);
     }
 
@@ -343,17 +351,21 @@ void GPIO::pollEdge(edgeCallback callback) const
 		 * Up to maxevents are returned by epoll_wait(). The maxevents argument must
 		 * be greater than zero.
 		 */
-		epollEventsNum = epoll_wait(epollFileDescriptor, &epollEvent, 1, -1);
+		//NOTE: If a timeout value is specified, and epoll_wait returns, the timeout value restarts.
+		//      to make it work so that after it is pressed once this function exits, add a break
+		//      after call to the callback function.
+		epollEventsNum = epoll_wait(epollFileDescriptor, &epollEvent, 1, this->inputWaitTimeMS);
 		epollTriggerCount++; //It seems like epoll_wait always returns once, use to to ignore the first trigger.
 
 		if (epollEventsNum == -1)
 		{
-			perror("GPIO: epll_wait failed");
+			perror("GPIO::pollEdge - Failed to wait for a file descriptor to be ready: epoll_wait()");
 			break;
 		}
 		else if(epollEventsNum == 0)
 		{
 			//No file descriptor became read during the requested timeout.
+			cout << "Warning: No file descriptor became available within the time specified (" << this->inputWaitTimeMS << " ms)" << endl;
 			break;
 		}
 		else
@@ -363,11 +375,11 @@ void GPIO::pollEdge(edgeCallback callback) const
 			   epollTriggerCount > 1)                  //Ignore the first trigger.
 			{
 				#ifdef DEBUG
-					bytesRead = read(fileDescriptor, readBuffer,MAX_BYTES_TO_READ);
+					bytesRead = read(epollEvent.data.fd, readBuffer,MAX_BYTES_TO_READ);
 
 					if(bytesRead == -1)
 					{
-						perror("Error reading file");
+						perror("GPIO::pollEdge - Error reading file descriptor. read()");
 					}
 					else
 					{
@@ -386,7 +398,7 @@ void GPIO::pollEdge(edgeCallback callback) const
 					 * at the end of the file. Call seek() to return the read cursor to the start
 					 * of the file.
 					 */
-					lseek(fileDescriptor, 0, SEEK_SET);
+					lseek(epollEvent.data.fd, 0, SEEK_SET);
 				#endif
 
 				callback();
@@ -395,7 +407,6 @@ void GPIO::pollEdge(edgeCallback callback) const
 	}
 
     close(fileDescriptor);
-    close(epollFileDescriptor);
 }
 
 /*

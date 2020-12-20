@@ -88,9 +88,10 @@ void buttonTest(void)
 {
 	cout << "Running GPIO Button Test" << endl;
 	GPIO button(115,
-			GPIO::DIRECTION::INPUT,
-			GPIO::EDGE::RISING);
+			    GPIO::DIRECTION::INPUT,
+			    GPIO::EDGE::RISING);
 
+	//button.inputWaitTimeMS = 10000; //10 seconds
 	button.triggerOnEdge(&activateLed);
 
 	cout << "Running GPIO Button Test Completed" << endl;
