@@ -1,13 +1,14 @@
 OBJS = main.o GPIO.o
+GCC = g++ -std=c++11
 
 executable : $(OBJS)
-	g++ -o RUN_ME $(OBJS)
+	$(GCC) -o RUN_ME $(OBJS) -pthread
 
 main.o : main.cpp GPIO.h
-	g++ -std=c++11 -c main.cpp
+	$(GCC) -c main.cpp
 
 GPIO.o : GPIO.h GPIO.cpp
-	g++ -std=c++11 -c GPIO.cpp
+	$(GCC) -c GPIO.cpp
 
 .PHONY : clean
 clean :

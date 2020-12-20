@@ -16,6 +16,8 @@ void pwmTest(void);
 void spiTest(void);
 void analogTest(void);
 
+void activateLed(void);
+
 enum TEST
 {
 	TEST_GPIO_LED = 0,
@@ -79,11 +81,25 @@ void ledTest(void)
 		led.setValue(GPIO::VALUE::LOW);
 		sleep(1);
 	}
+	cout << "Running GPIO LED Test Completed" << endl;
 }
 
 void buttonTest(void)
 {
 	cout << "Running GPIO Button Test" << endl;
+	GPIO button(115,
+			GPIO::DIRECTION::INPUT,
+			GPIO::EDGE::RISING);
+
+	button.triggerOnEdge(&activateLed);
+
+	cout << "Running GPIO Button Test Completed" << endl;
+}
+
+void activateLed(void)
+{
+	static unsigned int count = 0;
+	cout << "BUTTON PRESSED: " << count++ << endl;
 }
 
 void i2cTest(void)

@@ -3,9 +3,9 @@
 
 #include <iostream>
 #include <array>
-#include<fstream>
 
 using namespace std;
+typedef void (*edgeCallback)(void);
 
 #define GPIO_PINS 95
 
@@ -24,10 +24,21 @@ public:
 		HIGH = 1
 	};
 
-	GPIO(unsigned int pin, DIRECTION = DIRECTION::OUTPUT);
+	enum class EDGE
+	{
+		NONE    = 0,
+		RISING  = 1,
+		FALLING = 2,
+		BOTH    = 3
+	};
+
+	GPIO(unsigned int pin, DIRECTION = DIRECTION::OUTPUT, EDGE = EDGE::NONE);
 	~GPIO();
 	void setValue(const VALUE GPIO_VALUE) const;
 	void setDirection(const DIRECTION GPIO_DIRECTION) const;
+	void setEdge(const EDGE GPIO_EDGE) const;
+
+	void triggerOnEdge(edgeCallback callback);
 
 private:
 
@@ -38,6 +49,7 @@ private:
 	unsigned int gpioPinNumber;
 
 	const string getPinName(const unsigned int GPIO_PIN_NUMBER);
+	void pollEdge(edgeCallback callback) const;
 	bool writeToFile(const string fileName, const string value) const;
 };
 

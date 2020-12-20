@@ -1,3 +1,12 @@
+#include <string.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <thread>
+#include <fstream>
+
 #include "GPIO.h"
 
 const string GPIO::GPIO_PATH = "/sys/class/gpio/";
@@ -64,11 +73,11 @@ const std::array<std::pair<unsigned int, std::string>, GPIO_PINS> GPIO::GPIO_PIN
 	{15 , "p9.24"},
 	{117, "p9.25"},
 	{14 , "p9.26"},
-	{125, "p9.27"},
-	{123, "p9.128"},
-	{121, "p9.29"},
-	{122, "p9.30"},
-	{120, "p9.31"},
+	{115, "p9.27"},
+	{113, "p9.28"},
+	{111, "p9.29"},
+	{112, "p9.30"},
+	{110, "p9.31"},
 	{20 , "p9.41"},
 	{7  , "p9.42"}
 }};
@@ -77,7 +86,7 @@ const std::array<std::pair<unsigned int, std::string>, GPIO_PINS> GPIO::GPIO_PIN
  * Description:
  * 	Setup the chosen GPIO pin.
  */
-GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin)
+GPIO::GPIO(unsigned int pin, DIRECTION direction, EDGE edge) : gpioPinNumber(pin)
 {
 	/*
 	 * Create the path /sys/class/gpio/gpio<PinNumber>/. This gives access to the following attributes:
@@ -98,7 +107,8 @@ GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin)
 	system(configPinCmd);
 
 	setValue(GPIO::VALUE::LOW);
-	setDirection(GPIO::DIRECTION::OUTPUT);
+	setDirection(direction);
+	setEdge(edge);
 }
 
 /*
@@ -113,7 +123,8 @@ GPIO::GPIO(unsigned int pin, DIRECTION direction) : gpioPinNumber(pin)
  */
 const string GPIO::getPinName(const unsigned int GPIO_PIN_NUMBER)
 {
-	string gpioPinName = "none";
+	const string FAILURE = "none";
+	string gpioPinName = FAILURE;
 
 	for(unsigned int index = 0; index < GPIO_PINS; ++index)
 	{
@@ -121,6 +132,12 @@ const string GPIO::getPinName(const unsigned int GPIO_PIN_NUMBER)
 		{
 			gpioPinName = GPIO::GPIO_PIN_LOOKUP_TABLE[index].second;
 		}
+	}
+
+	if(strcmp(gpioPinName.c_str(), FAILURE.c_str()) == 0)
+	{
+		   perror("GPIO: Failed to find the pin specified.");
+		   exit(EXIT_FAILURE);
 	}
 
 	return gpioPinName;
@@ -169,6 +186,216 @@ void GPIO::setDirection(const DIRECTION GPIO_DIRECTION) const
 	}
 
 	writeToFile("direction", directionValue);
+}
+void GPIO::setEdge(const EDGE GPIO_EDGE) const
+{
+	string edgeValue;
+
+	switch(GPIO_EDGE)
+	{
+	case EDGE::NONE:
+		edgeValue = "none";
+		break;
+	case EDGE::RISING:
+		edgeValue = "rising";
+		break;
+	case EDGE::FALLING:
+		edgeValue = "falling";
+		break;
+	case EDGE::BOTH:
+		edgeValue = "both";
+		break;
+	default:
+		edgeValue = "none";
+		break;
+	}
+
+	writeToFile("edge", edgeValue);
+}
+
+void GPIO::triggerOnEdge(edgeCallback callback)
+{
+	thread edgeTrigger(&GPIO::pollEdge, this, callback);
+	edgeTrigger.join();
+}
+
+void GPIO::pollEdge(edgeCallback callback) const
+{
+	/*
+	 * What is a file descriptor:
+	 * In Unix and related computer operating systems, a file descriptor is an abstract
+	 * indicator (handle) used to access a file or other input/output resource, such as
+	 * a pipe or network socket. File descriptors form part of the POSIX application
+	 * programming interface.
+	 */
+
+	/* ************************************************************************
+	 * Create a new epoll instance to monitor a file descriptor for I/O
+	 * ************************************************************************
+	 * returns  a  file  descriptor referring to the new epoll
+	 * instance.  This file descriptor is used for all the subsequent calls to
+	 * the  epoll  interface.   When  no  longer required, the file descriptor
+	 * returned by epoll_create() should be closed by  using  close(2).   When
+	 * all  file  descriptors referring to an epoll instance have been closed,
+	 * the kernel destroys the instance and releases the associated  resources
+	 * for reuse.
+	 */
+	int epollFileDescriptor = epoll_create(1); //TODO: Close the epoll_create fd
+    if (epollFileDescriptor == -1)
+    {
+	   perror("GPIO: epoll_create(1) failed");
+	   exit(EXIT_FAILURE);
+    }
+
+    /* ************************************************************************
+     * Open the "value" file for reading. This file tells us when the button is pressed
+     * ************************************************************************
+     * The open() function establishes the connection between a file and a file
+     * descriptor. It creates an open file description that refers to a file and
+     * a file descriptor that refers to that open file description. The file
+     * descriptor is used by other I/O functions to refer to that file. The path
+     * argument points to a pathname naming the file.
+     *
+     * Open a file and return a new file descriptor for it, or -1 on error.
+     *
+     * O_RDONLY:
+     * 			Open for reading only.
+     *
+     * O_NONBLOCK:
+     * 			1) If O_NONBLOCK is set, an open() for reading-only shall
+     * 			   return without delay. An open() for writing-only shall
+     * 			   return an error if no process currently has the file
+     * 			   open for reading.
+     *
+     * 			2) If O_NONBLOCK is clear, an open() for reading-only shall
+     * 			   block the calling thread until a thread opens the file
+     * 			   for writing. An open() for writing-only shall block the
+     * 			   calling thread until a thread opens the file for reading.
+     *
+	 * Return:
+	 * 		Upon successful completion, the function will open the file and return a non-negative
+	 * 		integer representing the lowest numbered unused file descriptor. Otherwise, -1 is
+	 * 		returned and errno is set to indicate the error. No files will be created or modified
+	 * 		if the function returns -1.
+     */
+    int fileDescriptor = open((this->gpioPinPath + "value").c_str(), O_RDONLY | O_NONBLOCK);
+    if ( fileDescriptor == -1)
+    {
+       perror("GPIO: Failed to open file the value file.");
+       exit(EXIT_FAILURE);
+    }
+
+    /* ************************************************************************
+     * Describe the object linked to the file descriptor
+     * ************************************************************************
+     * EPOLLIN:
+     * 			The associated file is available for read(2) operations.
+     *
+     * EPOLLET:
+     * 			Sets the Edge Triggered behavior for the associated file descriptor.
+     *
+     * EPOLLPRI:
+     * 			There is urgent data available for read(2) operations.
+     */
+	struct epoll_event epollEvent;
+    epollEvent.events = EPOLLIN | EPOLLET | EPOLLPRI;	// read operation | edge triggered | urgent data
+    epollEvent.data.fd = fileDescriptor;  				// Associate the file's file descriptor
+
+    /* ************************************************************************
+     * Add the file descriptor entry to the new epoll instance created
+     * ************************************************************************
+     * EPOLL_CTL_ADD:
+     * 			Register the target file descriptor fileDescriptor onto the epoll instance
+     *        	referred to by the file descriptor epollFileDescriptor, and associate the
+     *        	event event with the internal file linked to fileDescriptor.
+     */
+    if (epoll_ctl(epollFileDescriptor,	// An instance of epoll to be manipulated
+    			  EPOLL_CTL_ADD, 		// Add a file descriptor to the interface
+				  fileDescriptor,		// The target of the operation
+				  &epollEvent)			// Describes which events the caller is interested in and any associated user data
+    		== -1)
+    {
+       perror("GPIO: Failed to add control interface");
+       close(fileDescriptor);
+       close(epollFileDescriptor);
+       exit(EXIT_FAILURE);
+    }
+
+    int epollTriggerCount = 0; //The number of times the epoll_wait() function returns.
+    int epollEventsNum = 0;    //The number of triggered events, one for every file descriptor.
+
+	#ifdef DEBUG
+		const unsigned int MAX_BYTES_TO_READ = 2;
+		char readBuffer[MAX_BYTES_TO_READ];
+		int bytesRead = 0;
+	#endif
+
+	while(true)
+	{
+	    /* ************************************************************************
+	     * Wait indefinitely until a file descriptor is ready for the requested I/O
+	     * ************************************************************************
+		 * int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+		 *
+		 * The epoll_wait() system call waits for events on the epoll(7) instance
+		 * referred to by the file descriptor epfd. The memory area pointed to by
+		 * events will contain the events that will be available for the caller.
+		 * Up to maxevents are returned by epoll_wait(). The maxevents argument must
+		 * be greater than zero.
+		 */
+		epollEventsNum = epoll_wait(epollFileDescriptor, &epollEvent, 1, -1);
+		epollTriggerCount++; //It seems like epoll_wait always returns once, use to to ignore the first trigger.
+
+		if (epollEventsNum == -1)
+		{
+			perror("GPIO: epll_wait failed");
+			break;
+		}
+		else if(epollEventsNum == 0)
+		{
+			//No file descriptor became read during the requested timeout.
+			break;
+		}
+		else
+		{
+			//Trigger occurred
+			if(epollEvent.data.fd == fileDescriptor && //Check if the trigger belongs to the file descriptor specified above
+			   epollTriggerCount > 1)                  //Ignore the first trigger.
+			{
+				#ifdef DEBUG
+					bytesRead = read(fileDescriptor, readBuffer,MAX_BYTES_TO_READ);
+
+					if(bytesRead == -1)
+					{
+						perror("Error reading file");
+					}
+					else
+					{
+						cout << "Reading " << bytesRead << " bytes: ";
+						for(unsigned int i = 0; i < (unsigned int)bytesRead; ++i)
+						{
+							cout << readBuffer[i];
+						}
+						cout << endl;
+					}
+
+					/* ************************************************************************
+					 * Reposition the file offset of the open file descriptor.
+					 * ************************************************************************
+					 * Call to read() reads through the entire file and leaves the read cursor
+					 * at the end of the file. Call seek() to return the read cursor to the start
+					 * of the file.
+					 */
+					lseek(fileDescriptor, 0, SEEK_SET);
+				#endif
+
+				callback();
+			}
+		}
+	}
+
+    close(fileDescriptor);
+    close(epollFileDescriptor);
 }
 
 /*
