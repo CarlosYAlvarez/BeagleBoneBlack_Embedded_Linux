@@ -6,6 +6,7 @@
 #include<unistd.h>
 
 #include "GPIO.h"
+#include "MemMap.h"
 
 using namespace std;
 
@@ -15,6 +16,7 @@ void i2cTest(void);
 void pwmTest(void);
 void spiTest(void);
 void analogTest(void);
+void registerWRTest(void);
 
 void activateLed(void);
 
@@ -26,6 +28,7 @@ enum TEST
 	TEST_PWM,
 	TEST_SPI,
 	TEST_ANALOG,
+	TEST_REGISTER_WR,
 	TEST_NUM
 };
 
@@ -40,6 +43,7 @@ int main()
 	test[TEST_PWM] = pwmTest;
 	test[TEST_SPI] = spiTest;
 	test[TEST_ANALOG] = analogTest;
+	test[TEST_REGISTER_WR] = registerWRTest;
 
 	while(true)
 	{
@@ -50,6 +54,7 @@ int main()
 		cout << "PWM Test:         " << TEST_PWM << endl;
 		cout << "SPI Test:         " << TEST_SPI << endl;
 		cout << "Analog Test:      " << TEST_ANALOG << endl;
+		cout << "Register WR Test: " << TEST_REGISTER_WR << endl;
 		cout << "Exit:             " << TEST_NUM << endl;
 
 		cin >> testNumber;
@@ -81,6 +86,7 @@ void ledTest(void)
 		led.setValue(GPIO::VALUE::LOW);
 		sleep(1);
 	}
+
 	cout << "Running GPIO LED Test Completed" << endl;
 }
 
@@ -127,3 +133,15 @@ void analogTest(void)
 
 }
 
+void registerWRTest(void)
+{
+	cout << "Running Register W/R Test" << endl;
+
+	MemMap memmap;
+
+	memmap.registerWrite(GPIO1_MEM_MAP_ADDR, GPIO_SETDATAOUT_OFFSET, (1 << 17));
+	sleep(2);
+	memmap.registerWrite(GPIO1_MEM_MAP_ADDR, GPIO_CLEARDATAOUT_OFFSET, (1 << 17));
+
+	cout << "Register W/R Test Completed" << endl;
+}
